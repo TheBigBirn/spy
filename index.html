@@ -350,13 +350,13 @@
       /* Local mode - player tiles */
       .player-tiles-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-        gap: 12px;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 14px;
         margin-bottom: 20px;
       }
 
       .player-tile {
-        padding: 24px 16px;
+        padding: 20px 16px;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border-radius: 12px;
@@ -367,6 +367,7 @@
         font-weight: 600;
         min-height: 80px;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
       }
@@ -378,6 +379,7 @@
 
       .player-tile.revealed {
         background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+        padding: 16px;
       }
 
       .player-tile.revealed.spy {
@@ -385,19 +387,54 @@
       }
 
       .player-tile .tile-number {
-        font-size: 24px;
+        font-size: 14px;
+        font-weight: 600;
+        opacity: 0.9;
+        margin-bottom: 4px;
+      }
+
+      .player-tile.revealed .tile-number {
+        margin-bottom: 8px;
+      }
+
+      .player-tile .tile-location {
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.2;
+        margin-bottom: 2px;
       }
 
       .player-tile .tile-role {
-        font-size: 14px;
-        margin-top: 8px;
+        font-size: 16px;
+        font-weight: 500;
         line-height: 1.3;
+        opacity: 0.95;
       }
 
       .player-tile .tile-hint {
-        font-size: 12px;
+        font-size: 11px;
+        opacity: 0.85;
+        margin-top: 10px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.3);
+      }
+
+      .player-tile.selected {
+        opacity: 0.6;
+        cursor: default;
+        pointer-events: none;
+      }
+
+      .player-tile.selected:hover {
+        transform: none;
+        box-shadow: none;
+      }
+
+      .player-tile .tile-viewed-badge {
+        font-size: 11px;
+        font-weight: 600;
         opacity: 0.9;
-        margin-top: 4px;
+        margin-top: 6px;
       }
 
       /* Rejoin section */
@@ -747,7 +784,7 @@
           };
         }
 
-        localGameState = { assignments, numPlayers };
+        localGameState = { assignments, numPlayers, selectedPlayers: new Set() };
         homeScreen.classList.add("hidden");
         localGameScreen.classList.remove("hidden");
 
@@ -764,20 +801,25 @@
 
       function toggleLocalTile(tile) {
         const playerNum = parseInt(tile.dataset.player, 10);
+        if (localGameState.selectedPlayers.has(playerNum)) return;
+
         const assignment = localGameState.assignments[playerNum];
         if (tile.classList.contains("revealed")) {
           tile.classList.remove("revealed", "spy");
-          tile.innerHTML = '<span class="tile-number">Player ' + playerNum + "</span>";
+          localGameState.selectedPlayers.add(playerNum);
+          tile.classList.add("selected");
+          tile.onclick = null;
+          tile.innerHTML =
+            '<span class="tile-number">Player ' + playerNum + "</span>" +
+            '<span class="tile-viewed-badge">✓ Viewed</span>';
         } else {
           tile.classList.add("revealed");
           if (assignment.isSpy) tile.classList.add("spy");
           tile.innerHTML =
             '<span class="tile-number">Player ' + playerNum + "</span>" +
-            '<div class="tile-role">' +
             (assignment.isSpy
-              ? "🕵️ You are the SPY!"
-              : assignment.location + " — " + assignment.role) +
-            "</div>" +
+              ? '<div class="tile-location">🕵️ You are the SPY!</div>'
+              : '<div class="tile-location">' + assignment.location + '</div><div class="tile-role">' + assignment.role + "</div>") +
             '<div class="tile-hint">Tap to hide</div>';
         }
       }
@@ -863,11 +905,17 @@
       });
 
       // Load rooms
-      function loadRooms() {
-        roomsRef.on("value", (snapshot) => {
-          const rooms = snapshot.val();
+      let roomsListenerAttached = false;
 
-          if (!rooms || Object.keys(rooms).length === 0) {
+      function loadRooms() {
+        if (roomsListenerAttached) {
+          roomsRef.off("value");
+        }
+        roomsRef.on("value", (snapshot) => {
+          roomsListenerAttached = true;
+          const rooms = snapshot && snapshot.val ? snapshot.val() : null;
+
+          if (!rooms || typeof rooms !== "object") {
             roomList.innerHTML =
               '<div class="status-message info">No rooms available. Create one!</div>';
             return;
@@ -875,19 +923,21 @@
 
           let roomsHtml = "";
           Object.entries(rooms).forEach(([roomId, room]) => {
+            if (!room || typeof room !== "object") return;
             if (!room.gameStarted) {
-              const playerCount = room.players
+              const playerCount = room.players && typeof room.players === "object"
                 ? Object.keys(room.players).length
                 : 0;
+              const roomName = (room.name || "Unnamed Room").replace(/</g, "&lt;").replace(/>/g, "&gt;");
               roomsHtml += `
-                <div class="room-item">
+                <div class="room-item" data-room-id="${roomId.replace(/"/g, "&quot;")}">
                   <div class="room-info">
-                    <h3>${room.name}</h3>
+                    <h3>${roomName}</h3>
                     <p>${playerCount} player(s)</p>
                   </div>
                   <div style="display: flex; gap: 10px;">
-                    <button onclick="joinRoom('${roomId}')">Join</button>
-                    <button onclick="deleteRoom('${roomId}')" class="danger" style="width: auto; padding: 10px 16px;">Delete</button>
+                    <button class="room-join-btn" data-room-id="${roomId.replace(/"/g, "&quot;")}">Join</button>
+                    <button class="room-delete-btn danger" data-room-id="${roomId.replace(/"/g, "&quot;")}" style="width: auto; padding: 10px 16px;">Delete</button>
                   </div>
                 </div>
               `;
@@ -897,23 +947,34 @@
           roomList.innerHTML =
             roomsHtml ||
             '<div class="status-message info">No rooms available. Create one!</div>';
+
+          // Attach click handlers via event delegation
+          roomList.querySelectorAll(".room-join-btn").forEach((btn) => {
+            btn.onclick = () => joinRoom(btn.dataset.roomId);
+          });
+          roomList.querySelectorAll(".room-delete-btn").forEach((btn) => {
+            btn.onclick = () => {
+              if (confirm("Are you sure you want to delete this room?")) {
+                deleteRoom(btn.dataset.roomId);
+              }
+            };
+          });
         });
       }
 
-      // Delete room
+      // Delete room (caller handles confirm)
       window.deleteRoom = function (roomId) {
-        if (confirm("Are you sure you want to delete this room?")) {
-          roomsRef
-            .child(roomId)
-            .remove()
-            .then(() => {
-              console.log("Room deleted:", roomId);
-            })
-            .catch((error) => {
-              console.error("Error deleting room:", error);
-              alert("Failed to delete room");
-            });
-        }
+        if (!roomId) return;
+        roomsRef
+          .child(roomId)
+          .remove()
+          .then(() => {
+            console.log("Room deleted:", roomId);
+          })
+          .catch((error) => {
+            console.error("Error deleting room:", error);
+            alert("Failed to delete room");
+          });
       };
 
       // Remove player from room
