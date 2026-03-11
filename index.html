@@ -316,6 +316,120 @@
         background: #fcf3cf;
         color: #7d6608;
       }
+
+      /* Game mode toggle */
+      .mode-toggle {
+        display: flex;
+        gap: 0;
+        margin-bottom: 25px;
+        background: #ecf0f1;
+        border-radius: 8px;
+        padding: 4px;
+        overflow: hidden;
+      }
+
+      .mode-toggle button {
+        flex: 1;
+        margin: 0;
+        border-radius: 6px;
+        padding: 12px;
+        background: transparent;
+        color: #7f8c8d;
+      }
+
+      .mode-toggle button.active {
+        background: #3498db;
+        color: white;
+      }
+
+      .mode-toggle button:not(.active):hover {
+        background: #d5dbdb;
+        color: #2c3e50;
+      }
+
+      /* Local mode - player tiles */
+      .player-tiles-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+
+      .player-tile {
+        padding: 24px 16px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-size: 18px;
+        font-weight: 600;
+        min-height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .player-tile:hover {
+        transform: scale(1.02);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      }
+
+      .player-tile.revealed {
+        background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+      }
+
+      .player-tile.revealed.spy {
+        background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+      }
+
+      .player-tile .tile-number {
+        font-size: 24px;
+      }
+
+      .player-tile .tile-role {
+        font-size: 14px;
+        margin-top: 8px;
+        line-height: 1.3;
+      }
+
+      .player-tile .tile-hint {
+        font-size: 12px;
+        opacity: 0.9;
+        margin-top: 4px;
+      }
+
+      /* Rejoin section */
+      .rejoin-section {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #d5f4e6;
+        border-radius: 8px;
+        border: 1px solid #27ae60;
+      }
+
+      .rejoin-section h3 {
+        color: #0e6655;
+        margin-bottom: 10px;
+        font-size: 16px;
+      }
+
+      .online-only {
+        display: block;
+      }
+
+      .local-only {
+        display: none;
+      }
+
+      body.local-mode .online-only {
+        display: none;
+      }
+
+      body.local-mode .local-only {
+        display: block;
+      }
     </style>
   </head>
   <body>
@@ -325,19 +439,60 @@
         <h1>🕵️ Spyfall</h1>
         <p class="subtitle">Find the spy among you!</p>
 
-        <div class="settings-group">
-          <label for="usernameInput">Your Name</label>
-          <input type="text" id="usernameInput" placeholder="Enter your name" />
+        <!-- Game Mode Toggle -->
+        <div class="mode-toggle">
+          <button type="button" id="localModeBtn" class="active">📱 Local (Pass & Play)</button>
+          <button type="button" id="onlineModeBtn">🌐 Online (Multiplayer)</button>
         </div>
 
-        <h2>Join Existing Room</h2>
-        <div id="roomList" class="room-list">
-          <div class="status-message info">Loading rooms...</div>
+        <!-- LOCAL MODE CONTENT -->
+        <div id="localModeContent" class="local-only">
+          <p class="status-message info">Pass the phone around! Each player taps their number to see their role.</p>
+          <div class="settings-group">
+            <label for="localPlayerCount">Number of Players</label>
+            <input type="number" id="localPlayerCount" value="4" min="3" max="12" />
+          </div>
+          <div class="settings-group">
+            <label for="localLocationCount">Number of Locations</label>
+            <input type="number" id="localLocationCount" value="27" min="3" max="27" />
+          </div>
+          <button id="startLocalGameBtn" class="success">Start Local Game</button>
         </div>
 
-        <div style="text-align: center; margin: 20px 0; color: #7f8c8d">OR</div>
+        <!-- ONLINE MODE CONTENT -->
+        <div id="onlineModeContent" class="online-only">
+          <div id="rejoinSection" class="rejoin-section hidden">
+            <h3>🔄 Rejoin Previous Game</h3>
+            <p id="rejoinRoomInfo"></p>
+            <div style="display: flex; gap: 10px;">
+              <button id="rejoinBtn" class="success">Rejoin Game</button>
+              <button id="dismissRejoinBtn" class="secondary" style="flex: 0;">Dismiss</button>
+            </div>
+          </div>
 
-        <button id="createRoomBtn" disabled>Create New Room</button>
+          <div class="settings-group">
+            <label for="usernameInput">Your Name</label>
+            <input type="text" id="usernameInput" placeholder="Enter your name" />
+          </div>
+
+          <h2>Join Existing Room</h2>
+          <div id="roomList" class="room-list">
+            <div class="status-message info">Loading rooms...</div>
+          </div>
+
+          <div style="text-align: center; margin: 20px 0; color: #7f8c8d">OR</div>
+
+          <button id="createRoomBtn" disabled>Create New Room</button>
+        </div>
+      </div>
+
+      <!-- LOCAL GAME SCREEN -->
+      <div id="localGameScreen" class="hidden">
+        <h1>🕵️ Spyfall</h1>
+        <p class="subtitle">Tap your number to see your role. Tap again to hide before passing.</p>
+        <h2>Players</h2>
+        <div id="playerTilesGrid" class="player-tiles-grid"></div>
+        <button id="endLocalGameBtn" class="danger">End Game</button>
       </div>
 
       <!-- LOBBY SCREEN -->
@@ -449,12 +604,201 @@
       const stopTimerBtn = document.getElementById("stopTimerBtn");
       const endGameBtn = document.getElementById("endGameBtn");
       const roomName = document.getElementById("roomName");
+      const localModeBtn = document.getElementById("localModeBtn");
+      const onlineModeBtn = document.getElementById("onlineModeBtn");
+      const localModeContent = document.getElementById("localModeContent");
+      const onlineModeContent = document.getElementById("onlineModeContent");
+      const startLocalGameBtn = document.getElementById("startLocalGameBtn");
+      const localGameScreen = document.getElementById("localGameScreen");
+      const playerTilesGrid = document.getElementById("playerTilesGrid");
+      const endLocalGameBtn = document.getElementById("endLocalGameBtn");
+      const rejoinSection = document.getElementById("rejoinSection");
+      const rejoinRoomInfo = document.getElementById("rejoinRoomInfo");
+      const rejoinBtn = document.getElementById("rejoinBtn");
+
+      const COOKIE_KEY = "spygame_player";
+      const COOKIE_DAYS = 7;
+
+      // Cookie helpers for reconnection
+      function setPlayerCookie(roomId, peerId, name) {
+        const data = JSON.stringify({ roomId, peerId, name, ts: Date.now() });
+        const expires = new Date();
+        expires.setDate(expires.getDate() + COOKIE_DAYS);
+        document.cookie = `${COOKIE_KEY}=${encodeURIComponent(data)};path=/;expires=${expires.toUTCString()};SameSite=Lax`;
+      }
+
+      function getPlayerCookie() {
+        const match = document.cookie.match(new RegExp("(?:^|; )" + COOKIE_KEY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "=([^;]*)"));
+        if (!match) return null;
+        try {
+          const data = JSON.parse(decodeURIComponent(match[1]));
+          if (data && data.roomId && data.peerId) return data;
+        } catch (e) {}
+        return null;
+      }
+
+      function clearPlayerCookie() {
+        document.cookie = `${COOKIE_KEY}=;path=/;expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+      }
+
+      // Game mode toggle
+      let gameMode = "local";
+
+      function setGameMode(mode) {
+        gameMode = mode;
+        document.body.classList.toggle("local-mode", mode === "local");
+        localModeBtn.classList.toggle("active", mode === "local");
+        onlineModeBtn.classList.toggle("active", mode === "online");
+        if (mode === "online") {
+          loadRooms();
+          checkRejoinAvailable();
+        }
+      }
+
+      localModeBtn.addEventListener("click", () => setGameMode("local"));
+      onlineModeBtn.addEventListener("click", () => setGameMode("online"));
+
+      function checkRejoinAvailable() {
+        const cookie = getPlayerCookie();
+        if (!cookie) {
+          rejoinSection.classList.add("hidden");
+          return;
+        }
+        roomsRef.child(cookie.roomId).once("value").then((snapshot) => {
+          const room = snapshot.val();
+          if (!room) {
+            rejoinSection.classList.add("hidden");
+            clearPlayerCookie();
+            return;
+          }
+          const playerStillInRoom = room.players && room.players[cookie.peerId];
+          if (!playerStillInRoom) {
+            rejoinSection.classList.add("hidden");
+            clearPlayerCookie();
+            return;
+          }
+          rejoinRoomInfo.textContent = `Rejoin "${room.name}" as ${cookie.name}` + (room.gameStarted ? " (game in progress)" : "");
+          rejoinSection.classList.remove("hidden");
+        });
+      }
+
+      rejoinBtn.addEventListener("click", () => {
+        const cookie = getPlayerCookie();
+        if (!cookie) return;
+        myPeerId = cookie.peerId;
+        myUsername = cookie.name;
+        currentRoomId = cookie.roomId;
+        usernameInput.value = cookie.name;
+        doRejoinRoom(cookie.roomId);
+      });
+
+      document.getElementById("dismissRejoinBtn").addEventListener("click", () => {
+        clearPlayerCookie();
+        rejoinSection.classList.add("hidden");
+      });
+
+      function doRejoinRoom(roomId) {
+        roomsRef.child(roomId).once("value").then((snapshot) => {
+          const room = snapshot.val();
+          if (!room) {
+            alert("Room no longer exists");
+            clearPlayerCookie();
+            return;
+          }
+          if (!room.players[myPeerId]) {
+            alert("You were removed from this game");
+            clearPlayerCookie();
+            return;
+          }
+          isHost = room.hostPeerId === myPeerId;
+          roomsRef.child(roomId).child("players").child(myPeerId).update({
+            name: myUsername,
+            connected: true,
+          });
+          const playerPresenceRef = roomsRef.child(roomId).child("players").child(myPeerId).child("connected");
+          playerPresenceRef.onDisconnect().set(false);
+          rejoinSection.classList.add("hidden");
+          if (room.gameStarted) {
+            gameState = room.gameState;
+            startGame();
+          } else {
+            showLobby();
+          }
+          watchRoom();
+        });
+      }
+
+      // Local game state
+      let localGameState = null;
+
+      function startLocalGame() {
+        const numPlayers = Math.min(12, Math.max(3, parseInt(document.getElementById("localPlayerCount").value) || 4));
+        const numLocations = Math.min(27, Math.max(3, parseInt(document.getElementById("localLocationCount").value) || 27));
+        const availableLocations = GAME_LOCATIONS.slice(0, numLocations);
+        const location = availableLocations[Math.floor(Math.random() * availableLocations.length)];
+        const spyIndex = Math.floor(Math.random() * numPlayers);
+
+        const assignments = {};
+        for (let i = 0; i < numPlayers; i++) {
+          assignments[i + 1] = {
+            isSpy: i === spyIndex,
+            location: i === spyIndex ? null : location.name,
+            role: i === spyIndex ? null : location.roles[i % location.roles.length],
+          };
+        }
+
+        localGameState = { assignments, numPlayers };
+        homeScreen.classList.add("hidden");
+        localGameScreen.classList.remove("hidden");
+
+        playerTilesGrid.innerHTML = "";
+        for (let i = 1; i <= numPlayers; i++) {
+          const tile = document.createElement("div");
+          tile.className = "player-tile";
+          tile.dataset.player = String(i);
+          tile.innerHTML = '<span class="tile-number">Player ' + i + "</span>";
+          tile.onclick = () => toggleLocalTile(tile);
+          playerTilesGrid.appendChild(tile);
+        }
+      }
+
+      function toggleLocalTile(tile) {
+        const playerNum = parseInt(tile.dataset.player, 10);
+        const assignment = localGameState.assignments[playerNum];
+        if (tile.classList.contains("revealed")) {
+          tile.classList.remove("revealed", "spy");
+          tile.innerHTML = '<span class="tile-number">Player ' + playerNum + "</span>";
+        } else {
+          tile.classList.add("revealed");
+          if (assignment.isSpy) tile.classList.add("spy");
+          tile.innerHTML =
+            '<span class="tile-number">Player ' + playerNum + "</span>" +
+            '<div class="tile-role">' +
+            (assignment.isSpy
+              ? "🕵️ You are the SPY!"
+              : assignment.location + " — " + assignment.role) +
+            "</div>" +
+            '<div class="tile-hint">Tap to hide</div>';
+        }
+      }
+
+      function endLocalGame() {
+        localGameState = null;
+        localGameScreen.classList.add("hidden");
+        homeScreen.classList.remove("hidden");
+      }
+
+      startLocalGameBtn.addEventListener("click", startLocalGame);
+      endLocalGameBtn.addEventListener("click", () => {
+        if (confirm("End the local game?")) endLocalGame();
+      });
 
       // Initialize app
       function initApp() {
         myPeerId =
           "user_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
-        createRoomBtn.disabled = false;
+        createRoomBtn.disabled = !usernameInput.value.trim();
+        setGameMode("local");
         loadRooms();
       }
 
@@ -508,6 +852,7 @@
             playerPresenceRef.set(true);
             playerPresenceRef.onDisconnect().set(false);
 
+            setPlayerCookie(roomId, myPeerId, myUsername);
             showLobby();
             watchRoom();
           })
@@ -633,6 +978,7 @@
                   .child("connected");
                 playerPresenceRef.onDisconnect().set(false);
 
+                setPlayerCookie(roomId, myPeerId, myUsername);
                 showLobby();
                 watchRoom();
               });
@@ -719,6 +1065,7 @@
         homeScreen.classList.add("hidden");
         lobbyScreen.classList.remove("hidden");
         gameScreen.classList.add("hidden");
+        localGameScreen.classList.add("hidden");
       }
 
       // Leave room
@@ -746,6 +1093,7 @@
         homeScreen.classList.remove("hidden");
         lobbyScreen.classList.add("hidden");
         gameScreen.classList.add("hidden");
+        if (gameMode === "online") checkRejoinAvailable();
       }
 
       // Start game
